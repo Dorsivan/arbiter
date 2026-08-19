@@ -1,0 +1,16 @@
+[project]
+name = "arbiter"
+version = "0.1.0"
+description = "K8s manifest generator powered by Claude, with MLflow tracing and k6 load testing"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "openai>=1.0",
+    "fastapi>=0.115",
+    "mlflow>=2.15",
+    "pydantic>=2.0",
+    "uvicorn[standard]>=0.30",
+]
+
+[project.scripts]
+arbiter = "app.main:run"
