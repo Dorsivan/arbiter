@@ -15,7 +15,15 @@ async def lifespan(app: FastAPI):
     mlflow.set_tracking_uri(
         os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000")
     )
-    mlflow.set_experiment(os.environ.get("MLFLOW_EXPERIMENT_NAME", "arbiter"))
+    # MLFLOW_WORKSPACE triggers a workspace-support probe that fails on
+    # servers (e.g. OpenShift AI) that don't expose that endpoint as JSON.
+    # Strip it so set_experiment doesn't crash, then restore it.
+    workspace = os.environ.pop("MLFLOW_WORKSPACE", None)
+    try:
+        mlflow.set_experiment(os.environ.get("MLFLOW_EXPERIMENT_NAME", "arbiter"))
+    finally:
+        if workspace is not None:
+            os.environ["MLFLOW_WORKSPACE"] = workspace
     backend = os.environ.get("LLM_BACKEND", "openai")
     if backend == "anthropic":
         mlflow.anthropic.autolog()
