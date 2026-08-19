@@ -2,6 +2,7 @@ import os
 from contextlib import asynccontextmanager
 
 import mlflow
+import mlflow.anthropic
 import mlflow.openai
 from fastapi import FastAPI
 
@@ -15,7 +16,11 @@ async def lifespan(app: FastAPI):
         os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000")
     )
     mlflow.set_experiment(os.environ.get("MLFLOW_EXPERIMENT_NAME", "arbiter"))
-    mlflow.openai.autolog()
+    backend = os.environ.get("LLM_BACKEND", "openai")
+    if backend == "anthropic":
+        mlflow.anthropic.autolog()
+    else:
+        mlflow.openai.autolog()
     yield
 
 

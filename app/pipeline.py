@@ -2,6 +2,7 @@ import json
 import os
 import re
 
+import anthropic
 import mlflow
 from openai import OpenAI
 
@@ -15,26 +16,56 @@ from app.prompts import (
     REVIEW_USER_TEMPLATE,
 )
 
+LLM_BACKEND = os.environ.get("LLM_BACKEND", "openai")
 MODEL_NAME = os.environ.get("MODEL_NAME", "")
 
-
-def get_client() -> OpenAI:
-    return OpenAI(
-        base_url=os.environ.get("OPENAI_API_BASE", "http://localhost:8000/v1"),
-        api_key=os.environ.get("OPENAI_API_KEY", "EMPTY"),
-    )
+_openai_client: OpenAI | None = None
+_anthropic_client: anthropic.Anthropic | None = None
 
 
-def _chat(client: OpenAI, system: str, user: str) -> str:
-    response = client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        temperature=0.2,
-    )
-    return response.choices[0].message.content or ""
+def get_openai_client() -> OpenAI:
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = OpenAI(
+            base_url=os.environ.get("OPENAI_API_BASE", "http://localhost:8000/v1"),
+            api_key=os.environ.get("OPENAI_API_KEY", "EMPTY"),
+        )
+    return _openai_client
+
+
+def get_anthropic_client() -> anthropic.Anthropic:
+    global _anthropic_client
+    if _anthropic_client is None:
+        _anthropic_client = anthropic.Anthropic()
+    return _anthropic_client
+
+
+def _chat(system: str, user: str) -> str:
+    if LLM_BACKEND == "anthropic":
+        client = get_anthropic_client()
+        model = MODEL_NAME or "claude-opus-4-6"
+        response = client.messages.create(
+            model=model,
+            max_tokens=16000,
+            system=system,
+            messages=[{"role": "user", "content": user}],
+            temperature=0.2,
+        )
+        for block in response.content:
+            if block.type == "text":
+                return block.text
+        return ""
+    else:
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            temperature=0.2,
+        )
+        return response.choices[0].message.content or ""
 
 
 def _extract_json(text: str) -> dict:
@@ -47,12 +78,11 @@ def _extract_json(text: str) -> dict:
 def analyze(
     description: str, repo_url: str | None, namespace: str
 ) -> ResourcePlan:
-    client = get_client()
     repo_line = f"GitHub repository: {repo_url}\n" if repo_url else ""
     user_msg = ANALYZE_USER_TEMPLATE.format(
         description=description, repo_line=repo_line, namespace=namespace
     )
-    raw = _chat(client, ANALYZE_SYSTEM_PROMPT, user_msg)
+    raw = _chat(ANALYZE_SYSTEM_PROMPT, user_msg)
     data = _extract_json(raw)
     return ResourcePlan(**data)
 
@@ -61,7 +91,6 @@ def analyze(
 def generate(
     resource_plan: ResourcePlan, description: str, namespace: str, replicas: int
 ) -> str:
-    client = get_client()
     user_msg = GENERATE_USER_TEMPLATE.format(
         app_name=resource_plan.app_name,
         app_type=resource_plan.app_type,
@@ -71,17 +100,16 @@ def generate(
         resources=", ".join(resource_plan.resources),
         reasoning=resource_plan.reasoning,
     )
-    return _chat(client, GENERATE_SYSTEM_PROMPT, user_msg)
+    return _chat(GENERATE_SYSTEM_PROMPT, user_msg)
 
 
 @mlflow.trace(name="review", span_type="LLM")
 def review(manifests: str, resource_plan: ResourcePlan) -> ReviewResult:
-    client = get_client()
     user_msg = REVIEW_USER_TEMPLATE.format(
         expected_resources=", ".join(resource_plan.resources),
         manifests=manifests,
     )
-    raw = _chat(client, REVIEW_SYSTEM_PROMPT, user_msg)
+    raw = _chat(REVIEW_SYSTEM_PROMPT, user_msg)
     data = _extract_json(raw)
     return ReviewResult(**data)
 

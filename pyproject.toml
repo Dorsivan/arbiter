@@ -5,11 +5,14 @@ description = "K8s manifest generator powered by Claude, with MLflow tracing and
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "anthropic>=0.52",
     "openai>=1.0",
     "fastapi>=0.115",
     "mlflow>=2.15",
     "pydantic>=2.0",
     "uvicorn[standard]>=0.30",
+    "streamlit>=1.35",
+    "requests>=2.31",
 ]
 
 [project.scripts]
