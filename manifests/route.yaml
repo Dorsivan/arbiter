@@ -1,0 +1,17 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: arbiter
+  namespace: arbiter
+  labels:
+    app.kubernetes.io/name: arbiter
+spec:
+  to:
+    kind: Service
+    name: arbiter
+    weight: 100
+  port:
+    targetPort: 8000
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
