@@ -42,7 +42,7 @@ def get_anthropic_client() -> anthropic.Anthropic:
     return _anthropic_client
 
 
-def _chat(system: str, user: str, span_name: str = "chat") -> str:
+def _chat(system: str, user: str, span_name: str = "chat", json_mode: bool = False) -> str:
     with tracer.start_as_current_span(span_name, attributes={
         "gen_ai.system": LLM_BACKEND,
         "gen_ai.request.model": MODEL_NAME or "claude-opus-4-6",
@@ -65,7 +65,7 @@ def _chat(system: str, user: str, span_name: str = "chat") -> str:
             return ""
         else:
             client = get_openai_client()
-            response = client.chat.completions.create(
+            kwargs = dict(
                 model=MODEL_NAME,
                 messages=[
                     {"role": "system", "content": system},
@@ -73,6 +73,9 @@ def _chat(system: str, user: str, span_name: str = "chat") -> str:
                 ],
                 temperature=0.2,
             )
+            if json_mode:
+                kwargs["response_format"] = {"type": "json_object"}
+            response = client.chat.completions.create(**kwargs)
             if response.usage:
                 span.set_attribute("gen_ai.usage.input_tokens", response.usage.prompt_tokens)
                 span.set_attribute("gen_ai.usage.output_tokens", response.usage.completion_tokens)
@@ -93,7 +96,7 @@ def analyze(
         user_msg = ANALYZE_USER_TEMPLATE.format(
             description=description, repo_line=repo_line, namespace=namespace
         )
-        raw = _chat(ANALYZE_SYSTEM_PROMPT, user_msg, "analyze_llm_call")
+        raw = _chat(ANALYZE_SYSTEM_PROMPT, user_msg, "analyze_llm_call", json_mode=True)
         data = _extract_json(raw)
         return ResourcePlan(**data)
 
@@ -120,7 +123,7 @@ def review(manifests: str, resource_plan: ResourcePlan) -> ReviewResult:
             expected_resources=", ".join(resource_plan.resources),
             manifests=manifests,
         )
-        raw = _chat(REVIEW_SYSTEM_PROMPT, user_msg, "review_llm_call")
+        raw = _chat(REVIEW_SYSTEM_PROMPT, user_msg, "review_llm_call", json_mode=True)
         data = _extract_json(raw)
         return ReviewResult(**data)
 

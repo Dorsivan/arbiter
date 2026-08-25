@@ -40,7 +40,7 @@ def get_anthropic_client() -> anthropic.Anthropic:
     return _anthropic_client
 
 
-def _chat(system: str, user: str) -> str:
+def _chat(system: str, user: str, json_mode: bool = False) -> str:
     if LLM_BACKEND == "anthropic":
         client = get_anthropic_client()
         model = MODEL_NAME or "claude-opus-4-6"
@@ -57,7 +57,7 @@ def _chat(system: str, user: str) -> str:
         return ""
     else:
         client = get_openai_client()
-        response = client.chat.completions.create(
+        kwargs = dict(
             model=MODEL_NAME,
             messages=[
                 {"role": "system", "content": system},
@@ -65,6 +65,9 @@ def _chat(system: str, user: str) -> str:
             ],
             temperature=0.2,
         )
+        if json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
+        response = client.chat.completions.create(**kwargs)
         return response.choices[0].message.content or ""
 
 
@@ -82,7 +85,7 @@ def analyze(
     user_msg = ANALYZE_USER_TEMPLATE.format(
         description=description, repo_line=repo_line, namespace=namespace
     )
-    raw = _chat(ANALYZE_SYSTEM_PROMPT, user_msg)
+    raw = _chat(ANALYZE_SYSTEM_PROMPT, user_msg, json_mode=True)
     data = _extract_json(raw)
     return ResourcePlan(**data)
 
@@ -109,7 +112,7 @@ def review(manifests: str, resource_plan: ResourcePlan) -> ReviewResult:
         expected_resources=", ".join(resource_plan.resources),
         manifests=manifests,
     )
-    raw = _chat(REVIEW_SYSTEM_PROMPT, user_msg)
+    raw = _chat(REVIEW_SYSTEM_PROMPT, user_msg, json_mode=True)
     data = _extract_json(raw)
     return ReviewResult(**data)
 
