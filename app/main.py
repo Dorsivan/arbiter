@@ -1,29 +1,38 @@
 import os
+from contextlib import asynccontextmanager
 
-MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000")
-MLFLOW_EXPERIMENT_ID = os.environ.get("MLFLOW_EXPERIMENT_ID", "0")
-MLFLOW_TRACKING_TOKEN = os.environ.get("MLFLOW_TRACKING_TOKEN", "")
-
-headers = f"x-mlflow-experiment-id={MLFLOW_EXPERIMENT_ID}"
-if MLFLOW_TRACKING_TOKEN:
-    headers += f",Authorization=Bearer {MLFLOW_TRACKING_TOKEN}"
-
-os.environ.setdefault(
-    "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
-    f"{MLFLOW_TRACKING_URI}/v1/traces",
-)
-os.environ.setdefault("OTEL_EXPORTER_OTLP_TRACES_HEADERS", headers)
-os.environ.setdefault("OTEL_SERVICE_NAME", "arbiter")
-
-import uvicorn
+import mlflow
+import mlflow.anthropic
+import mlflow.openai
 from fastapi import FastAPI
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 from app.models import GenerateRequest, GenerateResponse
 from app.pipeline import run_pipeline
 
-app = FastAPI(title="Arbiter", version="0.1.0")
-FastAPIInstrumentor.instrument_app(app)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    mlflow.set_tracking_uri(
+        os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000")
+    )
+    # MLFLOW_WORKSPACE triggers a workspace-support probe that fails on
+    # servers (e.g. OpenShift AI) that don't expose that endpoint as JSON.
+    # Strip it so set_experiment doesn't crash, then restore it.
+    workspace = os.environ.pop("MLFLOW_WORKSPACE", None)
+    try:
+        mlflow.set_experiment(os.environ.get("MLFLOW_EXPERIMENT_NAME", "arbiter"))
+    finally:
+        if workspace is not None:
+            os.environ["MLFLOW_WORKSPACE"] = workspace
+    backend = os.environ.get("LLM_BACKEND", "openai")
+    if backend == "anthropic":
+        mlflow.anthropic.autolog()
+    else:
+        mlflow.openai.autolog()
+    yield
+
+
+app = FastAPI(title="Arbiter", version="0.1.0", lifespan=lifespan)
 
 
 @app.get("/health")
@@ -37,6 +46,8 @@ def generate_manifests(request: GenerateRequest):
 
 
 def run():
+    import uvicorn
+
     uvicorn.run(
         "app.main:app",
         host=os.environ.get("APP_HOST", "0.0.0.0"),
