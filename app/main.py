@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from app.models import GenerateRequest, GenerateResponse
 from app.pipeline import run_pipeline
+from register_prompts import register_prompts
 
 
 @asynccontextmanager
@@ -29,6 +30,7 @@ async def lifespan(app: FastAPI):
         mlflow.anthropic.autolog()
     else:
         mlflow.openai.autolog()
+    register_prompts()
     yield
 
 
