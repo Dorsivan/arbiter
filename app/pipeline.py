@@ -7,17 +7,14 @@ import mlflow
 from openai import OpenAI
 
 from app.models import GenerateRequest, GenerateResponse, ResourcePlan, ReviewResult
-from app.prompts import (
-    ANALYZE_SYSTEM_PROMPT,
-    ANALYZE_USER_TEMPLATE,
-    GENERATE_SYSTEM_PROMPT,
-    GENERATE_USER_TEMPLATE,
-    REVIEW_SYSTEM_PROMPT,
-    REVIEW_USER_TEMPLATE,
-)
+from app.prompt_store import get_prompt, resolved_prompts
 
 LLM_BACKEND = os.environ.get("LLM_BACKEND", "openai")
 MODEL_NAME = os.environ.get("MODEL_NAME", "")
+
+
+def _temperature() -> float:
+    return float(os.environ.get("ARBITER_TEMPERATURE", "0.2"))
 
 _openai_client: OpenAI | None = None
 _anthropic_client: anthropic.Anthropic | None = None
@@ -49,7 +46,7 @@ def _chat(system: str, user: str, json_mode: bool = False) -> str:
             max_tokens=16000,
             system=system,
             messages=[{"role": "user", "content": user}],
-            temperature=0.2,
+            temperature=_temperature(),
         )
         for block in response.content:
             if block.type == "text":
@@ -63,7 +60,7 @@ def _chat(system: str, user: str, json_mode: bool = False) -> str:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            temperature=0.2,
+            temperature=_temperature(),
         )
         if json_mode:
             kwargs["response_format"] = {"type": "json_object"}
@@ -82,10 +79,10 @@ def analyze(
     description: str, repo_url: str | None, namespace: str
 ) -> ResourcePlan:
     repo_line = f"GitHub repository: {repo_url}\n" if repo_url else ""
-    user_msg = ANALYZE_USER_TEMPLATE.format(
+    user_msg = get_prompt("analyze", "user").format(
         description=description, repo_line=repo_line, namespace=namespace
     )
-    raw = _chat(ANALYZE_SYSTEM_PROMPT, user_msg, json_mode=True)
+    raw = _chat(get_prompt("analyze", "system").format(), user_msg, json_mode=True)
     data = _extract_json(raw)
     return ResourcePlan(**data)
 
@@ -94,7 +91,7 @@ def analyze(
 def generate(
     resource_plan: ResourcePlan, description: str, namespace: str, replicas: int
 ) -> str:
-    user_msg = GENERATE_USER_TEMPLATE.format(
+    user_msg = get_prompt("generate", "user").format(
         app_name=resource_plan.app_name,
         app_type=resource_plan.app_type,
         description=description,
@@ -103,30 +100,47 @@ def generate(
         resources=", ".join(resource_plan.resources),
         reasoning=resource_plan.reasoning,
     )
-    return _chat(GENERATE_SYSTEM_PROMPT, user_msg)
+    return _chat(get_prompt("generate", "system").format(), user_msg)
 
 
 @mlflow.trace(name="review", span_type="LLM")
 def review(manifests: str, resource_plan: ResourcePlan) -> ReviewResult:
-    user_msg = REVIEW_USER_TEMPLATE.format(
+    user_msg = get_prompt("review", "user").format(
         expected_resources=", ".join(resource_plan.resources),
         manifests=manifests,
     )
-    raw = _chat(REVIEW_SYSTEM_PROMPT, user_msg, json_mode=True)
+    raw = _chat(get_prompt("review", "system").format(), user_msg, json_mode=True)
     data = _extract_json(raw)
     return ReviewResult(**data)
 
 
+def _tag_trace() -> None:
+    """Record which prompt versions and model produced this trace."""
+    try:
+        resolved = resolved_prompts()
+        tags = {
+            "arbiter.prompt_alias": os.environ.get("ARBITER_PROMPT_ALIAS", "production"),
+            "arbiter.model": MODEL_NAME or LLM_BACKEND,
+        }
+        for name, info in resolved.items():
+            tags[f"arbiter.prompt.{name}"] = (
+                str(info["version"]) if info["source"] == "registry" else "code"
+            )
+        mlflow.update_current_trace(tags=tags)
+    except Exception:  # tracing must never break the request
+        pass
+
+
 @mlflow.trace(name="k8s_manifest_pipeline", span_type="CHAIN")
 def run_pipeline(request: GenerateRequest) -> GenerateResponse:
+    _tag_trace()
     resource_plan = analyze(request.description, request.repo_url, request.namespace)
     raw_manifests = generate(
         resource_plan, request.description, request.namespace, request.replicas
     )
     review_result = review(raw_manifests, resource_plan)
 
-    trace = mlflow.get_last_active_trace()
-    trace_id = trace.info.request_id if trace else None
+    trace_id = mlflow.get_active_trace_id()
 
     return GenerateResponse(
         app_name=resource_plan.app_name,

@@ -2,44 +2,46 @@ import os
 from contextlib import asynccontextmanager
 
 import mlflow
-import mlflow.anthropic
 import mlflow.openai
 from fastapi import FastAPI
 
 from app.models import GenerateRequest, GenerateResponse
 from app.pipeline import run_pipeline
-from register_prompts import register_prompts
+from app.prompt_store import clear_cache, resolved_prompts
+from config import setup_mlflow
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    mlflow.set_tracking_uri(
-        os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000")
-    )
-    # MLFLOW_WORKSPACE triggers a workspace-support probe that fails on
-    # servers (e.g. OpenShift AI) that don't expose that endpoint as JSON.
-    # Strip it so set_experiment doesn't crash, then restore it.
-    workspace = os.environ.pop("MLFLOW_WORKSPACE", None)
-    try:
-        mlflow.set_experiment(os.environ.get("MLFLOW_EXPERIMENT_NAME", "arbiter"))
-    finally:
-        if workspace is not None:
-            os.environ["MLFLOW_WORKSPACE"] = workspace
+    setup_mlflow()
     backend = os.environ.get("LLM_BACKEND", "openai")
     if backend == "anthropic":
+        import mlflow.anthropic
+
         mlflow.anthropic.autolog()
     else:
         mlflow.openai.autolog()
-    register_prompts()
+    if os.environ.get("ARBITER_REGISTER_PROMPTS_ON_START", "false").lower() == "true":
+        from register_prompts import register_prompts
+
+        register_prompts(commit_message="Registered on arbiter startup")
     yield
 
 
-app = FastAPI(title="Arbiter", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Arbiter", version="0.2.0", lifespan=lifespan)
 
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/prompts")
+def prompts(refresh: bool = False):
+    """Prompt versions currently used for requests (alias + version or code fallback)."""
+    if refresh:
+        clear_cache()
+    return resolved_prompts()
 
 
 @app.post("/generate", response_model=GenerateResponse)

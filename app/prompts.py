@@ -9,9 +9,9 @@ ANALYZE_USER_TEMPLATE = """\
 Analyze the following application and determine what Kubernetes resources \
 are needed to deploy it.
 
-Application description: {description}
-{repo_line}\
-Target namespace: {namespace}
+Application description: {{description}}
+{{repo_line}}\
+Target namespace: {{namespace}}
 
 Respond with a JSON object containing:
 - "app_name": a kebab-case name derived from the description
@@ -35,20 +35,20 @@ documents separated by "---".\
 GENERATE_USER_TEMPLATE = """\
 Generate Kubernetes YAML manifests for the following application:
 
-Application: {app_name} ({app_type})
-Description: {description}
-Namespace: {namespace}
-Replicas: {replicas}
+Application: {{app_name}} ({{app_type}})
+Description: {{description}}
+Namespace: {{namespace}}
+Replicas: {{replicas}}
 
-Required resources: {resources}
-Architecture reasoning: {reasoning}
+Required resources: {{resources}}
+Architecture reasoning: {{reasoning}}
 
 Requirements:
 - Use apps/v1 for Deployments
 - Include resource requests and limits on all containers
-- Use the namespace "{namespace}" on all resources
+- Use the namespace "{{namespace}}" on all resources
 - Include standard labels (app.kubernetes.io/name, app.kubernetes.io/component)
-- Use container image placeholders like "{app_name}:latest"
+- Use container image placeholders like "{{app_name}}:latest"
 - Include liveness and readiness probes where appropriate
 - Set securityContext with runAsNonRoot: true where possible
 
@@ -66,11 +66,11 @@ REVIEW_USER_TEMPLATE = """\
 Review the following Kubernetes manifests for best practices, security, \
 and completeness.
 
-Expected resources: {expected_resources}
+Expected resources: {{expected_resources}}
 
 Manifests to review:
 ```yaml
-{manifests}
+{{manifests}}
 ```
 
 Check for:
