@@ -7,3 +7,6 @@ dist/
 *.log
 .mypy_cache/
 .ruff_cache/
+mlflow.db
+mlruns/
+*.jpeg

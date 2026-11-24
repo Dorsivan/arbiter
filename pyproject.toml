@@ -1,14 +1,15 @@
 [project]
 name = "arbiter"
 version = "0.1.0"
-description = "K8s manifest generator powered by Claude, with MLflow tracing and k6 load testing"
+description = "K8s manifest generator powered by an LLM, with MLflow tracing and k6 load testing"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "anthropic>=0.52",
     "openai>=1.0",
     "fastapi>=0.115",
-    "mlflow>=2.15",
+    # Pin to the MLflow server version shipped with RHOAI 3.4 once known.
+    "mlflow[kubernetes]>=3.10,<4",
     "pydantic>=2.0",
     "uvicorn[standard]>=0.30",
     "streamlit>=1.35",
