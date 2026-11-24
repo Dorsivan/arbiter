@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: arbiter
-  namespace: arbiter
   labels:
     app.kubernetes.io/name: arbiter
     app.kubernetes.io/component: server
@@ -17,15 +16,26 @@ spec:
         app.kubernetes.io/name: arbiter
         app.kubernetes.io/component: server
     spec:
+      serviceAccountName: arbiter
       containers:
         - name: arbiter
-          image: quay.io/rh-ee-dsivan/arbiter:latest
+          image: arbiter:latest  # overridden via kustomize images
           ports:
             - containerPort: 8000
               protocol: TCP
           envFrom:
-            - secretRef:
+            - configMapRef:
                 name: arbiter-config
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: maas-api-key
+                  key: api-key
+            - name: MLFLOW_WORKSPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           resources:
             requests:
               cpu: 100m

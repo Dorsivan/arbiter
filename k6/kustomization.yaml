@@ -1,0 +1,11 @@
+# Load test: oc apply -k k6/ -n <namespace>   (re-run: oc delete job arbiter-k6 first)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - job.yaml
+configMapGenerator:
+  - name: arbiter-k6-script
+    files:
+      - load_test.js
+generatorOptions:
+  disableNameSuffixHash: true

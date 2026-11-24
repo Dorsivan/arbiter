@@ -1,0 +1,14 @@
+# Lets the arbiter pod write traces/read prompts in this namespace's MLflow workspace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: arbiter-mlflow-integration
+  labels:
+    app.kubernetes.io/name: arbiter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: mlflow-operator-mlflow-integration
+subjects:
+  - kind: ServiceAccount
+    name: arbiter

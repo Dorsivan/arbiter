@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: arbiter-config
+  labels:
+    app.kubernetes.io/name: arbiter
+data:
+  LLM_BACKEND: "openai"
+  OPENAI_API_BASE: "https://maas.apps.ocp.paladinaura.com/workshop-models/qwen3-30b/v1"
+  MODEL_NAME: "qwen3-30b"
+  MLFLOW_TRACKING_URI: "https://rh-ai.apps.ocp.paladinaura.com/mlflow"
+  MLFLOW_TRACKING_AUTH: "kubernetes-namespaced"
+  MLFLOW_EXPERIMENT_NAME: "arbiter"
+  ARBITER_PROMPT_SOURCE: "registry"
+  ARBITER_PROMPT_ALIAS: "production"
+  ARBITER_PROMPT_CACHE_TTL: "30"
+  ARBITER_TEMPERATURE: "0.2"

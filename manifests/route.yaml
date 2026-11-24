@@ -2,7 +2,6 @@ apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
   name: arbiter
-  namespace: arbiter
   labels:
     app.kubernetes.io/name: arbiter
 spec:

@@ -1,0 +1,20 @@
+# Namespace-agnostic base. Use from an overlay:
+#   resources: [github.com/Dorsivan/arbiter//manifests?ref=workshop]
+#   namespace: user1
+#   images: [{name: arbiter, newName: image-registry.openshift-image-registry.svc:5000/workshop-images/arbiter, newTag: latest}]
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: arbiter
+resources:
+  - serviceaccount.yaml
+  - rolebinding-mlflow.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - route.yaml
+images:
+  - name: arbiter
+    newName: quay.io/rh-ee-dsivan/arbiter
+    newTag: workshop
