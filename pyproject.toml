@@ -9,7 +9,7 @@ dependencies = [
     "openai>=1.0",
     "fastapi>=0.115",
     # Pin to the MLflow server version shipped with RHOAI 3.4 once known.
-    "mlflow[kubernetes]>=3.10,<4",
+    "mlflow[kubernetes]>=3.10,<3.11",
     "pydantic>=2.0",
     "uvicorn[standard]>=0.30",
     "streamlit>=1.35",
@@ -22,3 +22,12 @@ dependencies = [
 
 [project.scripts]
 arbiter = "app.main:run"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+# Installable for the workshop labs / lab-runtime image (pip install git+...@workshop)
+packages = ["app"]
+py-modules = ["config", "register_prompts"]
